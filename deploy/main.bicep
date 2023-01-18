@@ -5,7 +5,10 @@ param location string = resourceGroup().location
 param appServiceAppName string = 'toylaunch${uniqueString(resourceGroup().id)}'
 
 @description('The name of the storage account to deploy. This name must be globally unique.')
-param storageAccountName string = 'toylaunch${uniqueString(resourceGroup().id)}'
+param storageAccountName string
+
+@description('The name of the queue to deploy for processing orders.')
+param processOrderQueueName string
 
 @description('The type of the environment. This must be nonprod or prod.')
 @allowed([
@@ -15,6 +18,7 @@ param storageAccountName string = 'toylaunch${uniqueString(resourceGroup().id)}'
 param environmentType string
 
 var storageAccountSkuName = (environmentType == 'prod') ? 'Standard_GRS' : 'Standard_LRS'
+var processOrderQueueName = 'processorder'
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2019-06-01' = {
   name: storageAccountName
@@ -26,6 +30,13 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2019-06-01' = {
   properties: {
     accessTier: 'Hot'
   }
+  resource queueServices 'queueServices' existing = {
+    name: 'default'
+
+    resource processOrderQueue 'queues' = {
+      name: processOrderQueueName
+    }
+  } 
 }
 
 module appService 'modules/appService.bicep' = {
@@ -33,6 +44,8 @@ module appService 'modules/appService.bicep' = {
   params: {
     location: location
     appServiceAppName: appServiceAppName
+    storageAccountName: storageAccount.name
+    processOrderQueueName: storageAccount::queueServices::processOrderQueue.name
     environmentType: environmentType
   }
 }
